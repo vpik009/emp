@@ -1,9 +1,11 @@
-1) Create Python Environment with Python 3.10 (!)
-2) Install latest Pytorch version with CUDA
-3) Install onnx using: conda install -c conda-forge onnx
-4) Remove onxx from requirements.txt
-5) Remove versions from lightning and hydra-core
-6) pip install -r requirements.txt
-7) pip install matplotlib
-8) pip install av2
-9) pip install ray==2.9
+1) Create Python environment with version 3.9 (!) and numpy<1.24: conda create -n emp python=3.9 "numpy<1.24" -y
+2) Activate
+3) Install old torch version they suggest: pip --no-cache-dir install torch==1.11.0+cu113  torchvision==0.12.0+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
+4) Relax lightning version in requirements.txt to >=1.8,<1.9
+5) Remove onxx, scikit-learn, matplotlib from requirements.txt
+6) Remove version requirement for protobuf
+7) pip install -r requirements.txt
+8) Install onnx using: conda install -c conda-forge onnx -y
+9) Same for scikit: conda install -c conda-forge scikit-learn -y
+10) And: conda install -c conda-forge matplotlib=3.4.3 -y
+11) pip install av2
