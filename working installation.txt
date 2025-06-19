@@ -1,0 +1,9 @@
+1) Create Python Environment with Python 3.10 (!)
+2) Install latest Pytorch version with CUDA
+3) Install onnx using: conda install -c conda-forge onnx
+4) Remove onxx from requirements.txt
+5) Remove versions from lightning and hydra-core
+6) pip install -r requirements.txt
+7) pip install matplotlib
+8) pip install av2
+9) pip install ray==2.9
