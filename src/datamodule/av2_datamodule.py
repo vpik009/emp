@@ -16,9 +16,10 @@ class Av2DataModule(LightningDataModule):
         val_batch_size: int = 32,
         test_batch_size: int = 32,
         shuffle: bool = True,
-        num_workers: int = 8,
+        num_workers: int = 0,
         pin_memory: bool = True,
         test: bool = False,
+        train_fraction: float = 1.0
     ):
         super(Av2DataModule, self).__init__()
         self.data_root = Path(data_root)
@@ -30,18 +31,19 @@ class Av2DataModule(LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.test = test
+        self.train_fraction = train_fraction
 
     def setup(self, stage: Optional[str] = None) -> None:
         if not self.test:
             self.train_dataset = Av2Dataset(
-                data_root=self.data_root / self.data_folder, cached_split="train"
+                data_root=self.data_root / self.data_folder, cached_split="train", train_fraction=self.train_fraction
             )
             self.val_dataset = Av2Dataset(
-                data_root=self.data_root / self.data_folder, cached_split="val"
+                data_root=self.data_root / self.data_folder, cached_split="val", train_fraction=self.train_fraction
             )
         else:
             self.test_dataset = Av2Dataset(
-                data_root=self.data_root / self.data_folder, cached_split="test"
+                data_root=self.data_root / self.data_folder, cached_split="test", train_fraction=self.train_fraction
             )
 
     def train_dataloader(self):

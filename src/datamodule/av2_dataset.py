@@ -15,12 +15,16 @@ class Av2Dataset(Dataset):
         data_root: Path,
         cached_split: str = None,
         extractor: Av2Extractor = None,
+        train_fraction: float = 1.0,
     ):
         super(Av2Dataset, self).__init__()
 
         if cached_split is not None:
             self.data_folder = Path(data_root) / cached_split
             self.file_list = sorted(list(self.data_folder.glob("*.pt")))
+            if train_fraction is not None:
+                n_samples = int(train_fraction * len(self.file_list))
+                self.file_list = self.file_list[:n_samples]
             self.load = True
         elif extractor is not None:
             self.extractor = extractor
