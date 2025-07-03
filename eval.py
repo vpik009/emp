@@ -7,11 +7,12 @@ from importlib import import_module
 import torch
 
 @hydra.main(version_base=None, config_path="./conf/", config_name="config")
+@hydra.main(version_base=None, config_path="./conf/", config_name="config")
 def main(conf):
     pl.seed_everything(conf.seed)
 
-    log_base_dir = "/".join( conf.checkpoint.split("/")[:-2] ) + "/"
     checkpoint = to_absolute_path(conf.checkpoint)
+    print(checkpoint)
     assert os.path.exists(checkpoint), f"Checkpoint {checkpoint} does not exist"
 
     model_path = conf.model.target._target_
@@ -36,8 +37,7 @@ def main(conf):
 
     trainer = pl.Trainer(
         logger=False,
-        accelerator=accelerator,
-        devices=1,
+
         max_epochs=1,
         limit_val_batches=conf.limit_val_batches,
         limit_test_batches=conf.limit_test_batches,
@@ -50,6 +50,7 @@ def main(conf):
         trainer.validate(model, datamodule)
     else:
         trainer.test(model, datamodule)
+
 
 
 if __name__ == "__main__":
