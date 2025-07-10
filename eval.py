@@ -9,7 +9,7 @@ import torch
 @hydra.main(version_base=None, config_path="./conf/", config_name="config")
 def main(conf):
     pl.seed_everything(conf.seed)
-    breakpoint()
+
     log_base_dir = "/".join( conf.checkpoint.split("/")[:-2] ) + "/"
     checkpoint = to_absolute_path(conf.checkpoint)
     assert os.path.exists(checkpoint), f"Checkpoint {checkpoint} does not exist"
@@ -43,7 +43,6 @@ def main(conf):
         limit_test_batches=conf.limit_test_batches,
      )
     
-    breakpoint()
 
     datamodule: pl.LightningDataModule = instantiate(conf.datamodule, test=conf.test)
 
