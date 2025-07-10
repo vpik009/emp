@@ -1,0 +1,6 @@
+- data_root=data
+- model=emp_small_baseline
+- gpus=1
+- batch_size=48
+- monitor=val_minFDE6
+- model.target.decoder=detr
