@@ -12,7 +12,7 @@ from .emp import EMP
 from src.metrics import MR, brierMinFDE, minADE, minFDE
 from src.utils.optim import WarmupCosLR
 from src.utils.submission_av2 import SubmissionAv2
-
+from scipy.optimize import linear_sum_assignment
 
 torch.set_printoptions(sci_mode=False)
 
@@ -29,11 +29,15 @@ class Trainer(pl.LightningModule):
         qkv_bias=False,
         drop_path=0.2,
         pretrained_weights: str = None,
+        teacher_weights: str = None,
         lr: float = 1e-3,
         warmup_epochs: int = 10,
         epochs: int = 60,
         weight_decay: float = 1e-4,
-        decoder: str = "detr"
+        decoder: str = "detr",
+        # distillation parameters
+        distill_alpha: float = 0.5,
+        distill_temp: float = 2.0,
     ) -> None:
         super(Trainer, self).__init__()
         self.warmup_epochs = warmup_epochs
@@ -46,6 +50,9 @@ class Trainer(pl.LightningModule):
         self.future_steps = future_steps
         self.submission_handler = SubmissionAv2()
 
+        self.distill_alpha = distill_alpha
+        self.distill_temp = distill_temp
+
         self.net = EMP(
             embed_dim=dim,
             encoder_depth=encoder_depth,
@@ -54,10 +61,30 @@ class Trainer(pl.LightningModule):
             qkv_bias=qkv_bias,
             drop_path=drop_path,
             decoder=decoder
-        )  
+        )
 
         if pretrained_weights is not None:
             self.net.load_from_checkpoint(pretrained_weights)
+
+        if teacher_weights:
+            print("using teacher weights for distillation")
+            self.teacher = EMP(  # take model architecture from EMP
+                embed_dim=128,
+                encoder_depth=4,
+                num_heads=8,
+                mlp_ratio=4.0,
+                qkv_bias=qkv_bias,
+                drop_path=drop_path,
+                decoder=decoder,
+            )
+
+            self.teacher.load_from_checkpoint(teacher_weights)
+            self.teacher.eval()
+            for p in self.teacher.parameters():
+                p.requires_grad = False
+        else:
+            print("no teacher weights provided, distillation will not be used")
+            self.teacher = None
 
         metrics = MetricCollection(
             {
@@ -73,14 +100,11 @@ class Trainer(pl.LightningModule):
         self.curr_ep = 0
         return
 
-
     def getNet(self):
         return self.net
 
-
     def forward(self, data):
         return self.net(data)
-
 
     def predict(self, data, full=False):
         with torch.no_grad():
@@ -89,37 +113,78 @@ class Trainer(pl.LightningModule):
             data, out["y_hat"], out["pi"], inference=True
         )
         predictions = [predictions, out] if full else predictions
-        return predictions, prob    
+        return predictions, prob
 
 
     def cal_loss(self, out, data, batch_idx=0):
         y_hat, pi, y_hat_others = out["y_hat"], out["pi"], out["y_hat_others"]
         y, y_others = data["y"][:, 0], data["y"][:, 1:]
 
-        loss = 0
-        B = y_hat.shape[0]
+        B, K = y_hat.shape[:2]
         B_range = range(B)
-
-
         l2_norm = torch.norm(y_hat[..., :2] - y.unsqueeze(1), dim=-1).sum(-1)
-
         best_mode = torch.argmin(l2_norm, dim=-1)
         y_hat_best = y_hat[B_range, best_mode]
         agent_reg_loss = F.smooth_l1_loss(y_hat_best[..., :2], y)
-
         agent_cls_loss = F.cross_entropy(pi, best_mode.detach())
-        loss += agent_reg_loss + agent_cls_loss
-        
         others_reg_mask = ~data["x_padding_mask"][:, 1:, self.history_steps:]
         others_reg_loss = F.smooth_l1_loss(y_hat_others[others_reg_mask], y_others[others_reg_mask])
-        loss += others_reg_loss
-    
+
+        distill_loss = 0.0
+        loss = agent_reg_loss + agent_cls_loss + others_reg_loss
+
+        if self.teacher is not None:
+            print("teacher logits matching distillation")
+            with torch.no_grad():
+                teacher_out = self.teacher(data)
+
+            student_traj = out["y_hat"].detach().cpu().numpy()  # [B, K, T, 2]
+            teacher_traj = teacher_out["y_hat"].detach().cpu().numpy()  # [B, K, T, 2]
+            teacher_pi = teacher_out["pi"]  # [B, K]
+
+            aligned_teacher_pi = torch.zeros_like(pi)
+
+            for b in range(B):
+                # build a cost matrix with L2 distance between all student and teacher pairs
+                cost = np.linalg.norm(
+                    student_traj[b][:, None, :, :] - teacher_traj[b][None, :, :, :],
+                    axis=(-1, -2)
+                )  # shape is [K, K] where K is the number of predicted modes
+
+                row_ind, col_ind = linear_sum_assignment(cost)  # row_ind = student, col_ind = matched teacher
+
+                # reorder teacher logits to match student modes to calc divergence
+                # might still not be identical to student modes, but should be closer... does distillation make sense here?
+                aligned_teacher_pi[b] = torch.zeros_like(teacher_pi[b])
+                aligned_teacher_pi[b] = teacher_pi[b][col_ind]
+
+                # # Debug: print costs if first batch
+                # if batch_idx == 0 and b < 3:
+                #     print(f"[DEBUG] Sample {b} matching cost matrix:\n{np.round(cost, 2)}")
+                #     print(f"[DEBUG] Student mode i matched with Teacher mode j: {list(zip(row_ind, col_ind))}")
+
+            # Compute distillation loss on aligned logits
+            student_logits = F.log_softmax(pi / self.distill_temp, dim=-1)  # kl_div expects log probabilities for input
+            teacher_logits = F.softmax(aligned_teacher_pi / self.distill_temp, dim=-1)  # kl_div expects probabilities for target
+            distill_loss = F.kl_div(student_logits, teacher_logits, reduction="batchmean") * (self.distill_temp ** 2)  # T^2 ensures the magnitude of the loss is similar to the main losses since temperature can make it smaller
+
+            # we use lower weight for distill loss to not overpower the main losses early in training and pick it up later when we expect the model to be more stable
+            print("current epoch:", self.current_epoch)
+            alpha = self.distill_alpha * min( (self.current_epoch / 20), 1.0)  # increase distill weight but max at 1
+            loss = (1 - alpha) * loss + alpha * distill_loss
+            # loss +=  self.distill_alpha * (self.current_epoch / 20) * distill_loss
+        else:
+            print("No teacher model available for distillation")
+
         return {
             "loss": loss,
             "reg_loss": agent_reg_loss.item(),
             "cls_loss": agent_cls_loss.item(),
             "others_reg_loss": others_reg_loss.item(),
+            "distill_loss": distill_loss.item() if isinstance(distill_loss, torch.Tensor) else 0.0,
         }
+
+
 
     def training_step(self, data, batch_idx):
         out = self(data)

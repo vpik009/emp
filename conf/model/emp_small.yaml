@@ -12,6 +12,7 @@ target:
   qkv_bias: False
   drop_path: 0.2
   pretrained_weights: ${pretrained_weights}
+  teacher_weights: null
   lr: ${lr}
   weight_decay: ${weight_decay}
   epochs: ${epochs}

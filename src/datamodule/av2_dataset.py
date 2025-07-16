@@ -15,7 +15,7 @@ class Av2Dataset(Dataset):
         data_root: Path,
         cached_split: str = None,
         extractor: Av2Extractor = None,
-        train_fraction: float = 1.0,
+        train_fraction: float = 0.25,
     ):
         super(Av2Dataset, self).__init__()
 

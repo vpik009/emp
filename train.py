@@ -48,7 +48,7 @@ def main(conf):
         logger=logger,
         gradient_clip_val=conf.gradient_clip_val,
         gradient_clip_algorithm=conf.gradient_clip_algorithm,
-        max_epochs=1,
+        max_epochs=conf.epochs,
         accelerator="auto",
         devices=1,
         strategy="auto",
