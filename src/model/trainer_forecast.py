@@ -133,7 +133,7 @@ class Trainer(pl.LightningModule):
         distill_loss = 0.0
         loss = agent_reg_loss + agent_cls_loss + others_reg_loss
 
-        if self.teacher is not None:
+        if self.teacher is not None and self.current_epoch >= 40:
             print("teacher logits matching distillation")
             with torch.no_grad():
                 teacher_out = self.teacher(data)
