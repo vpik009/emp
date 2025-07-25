@@ -133,46 +133,50 @@ class Trainer(pl.LightningModule):
         distill_loss = 0.0
         loss = agent_reg_loss + agent_cls_loss + others_reg_loss
 
-        if self.teacher is not None and self.current_epoch >= 40:
-            print("teacher logits matching distillation")
+        if self.teacher is not None:
+            print("teacher trajectory distillation")
             with torch.no_grad():
                 teacher_out = self.teacher(data)
 
-            student_traj = out["y_hat"].detach().cpu().numpy()  # [B, K, T, 2]
-            teacher_traj = teacher_out["y_hat"].detach().cpu().numpy()  # [B, K, T, 2]
-            teacher_pi = teacher_out["pi"]  # [B, K]
+            student_traj = out["y_hat"].detach().cpu().numpy()    # [B, K, T, 2]
+            teacher_traj = teacher_out["y_hat"].detach().cpu().numpy()
+            # get confidence of student and teacher
+            student_pi = F.softmax(pi, dim=-1)
+            teacher_pi = F.softmax(teacher_out["pi"], dim=-1)
 
-            aligned_teacher_pi = torch.zeros_like(pi)
+            distill_loss = 0.0
 
             for b in range(B):
-                # build a cost matrix with L2 distance between all student and teacher pairs
+                # calculate cost matrix with euclidean distance (L2 norm)
                 cost = np.linalg.norm(
                     student_traj[b][:, None, :, :] - teacher_traj[b][None, :, :, :],
                     axis=(-1, -2)
-                )  # shape is [K, K] where K is the number of predicted modes
+                )  # resulting shape is [K, K]
 
-                row_ind, col_ind = linear_sum_assignment(cost)  # row_ind = student, col_ind = matched teacher
+                # perform Hungarian matching (finds minimal cost pairs).
+                # row_ind: student modes, col_ind: corresponding closest teacher modes
+                row_ind, col_ind = linear_sum_assignment(cost)
 
-                # reorder teacher logits to match student modes to calc divergence
-                # might still not be identical to student modes, but should be closer... does distillation make sense here?
-                aligned_teacher_pi[b] = torch.zeros_like(teacher_pi[b])
-                aligned_teacher_pi[b] = teacher_pi[b][col_ind]
+                # get closest student and teacher trajectories
+                s_matched = torch.tensor(student_traj[b][row_ind], device=pi.device)
+                t_matched = torch.tensor(teacher_traj[b][col_ind], device=pi.device)
 
-                # # Debug: print costs if first batch
-                # if batch_idx == 0 and b < 3:
-                #     print(f"[DEBUG] Sample {b} matching cost matrix:\n{np.round(cost, 2)}")
-                #     print(f"[DEBUG] Student mode i matched with Teacher mode j: {list(zip(row_ind, col_ind))}")
+                # get confidence scores for the matched trajectories
+                s_conf = student_pi[b][row_ind]
+                t_conf = teacher_pi[b][col_ind]
+                weights = s_conf * t_conf  # prioritize when the trajectories have high confidence
 
-            # Compute distillation loss on aligned logits
-            student_logits = F.log_softmax(pi / self.distill_temp, dim=-1)  # kl_div expects log probabilities for input
-            teacher_logits = F.softmax(aligned_teacher_pi / self.distill_temp, dim=-1)  # kl_div expects probabilities for target
-            distill_loss = F.kl_div(student_logits, teacher_logits, reduction="batchmean") * (self.distill_temp ** 2)  # T^2 ensures the magnitude of the loss is similar to the main losses since temperature can make it smaller
+                traj_loss = F.smooth_l1_loss(s_matched, t_matched, reduction='none')  # get L1 loss for each matched pair
+                traj_loss = (traj_loss.mean(dim=(1, 2)) * weights).sum()  # weighted average loss over all modes
+                distill_loss += traj_loss
 
-            # we use lower weight for distill loss to not overpower the main losses early in training and pick it up later when we expect the model to be more stable
+            distill_loss = distill_loss / B  # average over batch for stability
+
+            # Ramp alpha over epochs (optional)
             print("current epoch:", self.current_epoch)
-            alpha = self.distill_alpha * min( (self.current_epoch / 20), 1.0)  # increase distill weight but max at 1
+            alpha = self.distill_alpha * min((self.current_epoch / 20), 1.0)
+
             loss = (1 - alpha) * loss + alpha * distill_loss
-            # loss +=  self.distill_alpha * (self.current_epoch / 20) * distill_loss
         else:
             print("No teacher model available for distillation")
 
