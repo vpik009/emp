@@ -8,8 +8,8 @@ from hydra.utils import instantiate
 from pytorch_lightning.callbacks import (LearningRateMonitor, ModelCheckpoint,
                                          RichModelSummary, RichProgressBar)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning.profilers import SimpleProfile
-
+from pytorch_lightning.profilers import SimpleProfiler
+import pickle
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(conf):
@@ -55,8 +55,8 @@ def main(conf):
         devices=1,
         strategy="auto",
         callbacks=callbacks,
-        # limit_train_batches=1.0,
-        limit_val_batches=0.01, #conf.limit_val_batches,
+        limit_train_batches=conf.limit_train_batches,
+        limit_val_batches=conf.limit_val_batches,
         sync_batchnorm=conf.sync_bn,
         profiler=profiler
     )
@@ -65,6 +65,11 @@ def main(conf):
     datamodule = instantiate(conf.datamodule)
 
     trainer.fit(model, datamodule, ckpt_path=conf.checkpoint)
+
+    # save the profiler results
+    with open("profiler.pkl", "wb") as f:
+        pickle.dump(profiler, f)
+    print("Profiler pickled and saved to profiler.pkl")
 
 
 if __name__ == "__main__":
