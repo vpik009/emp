@@ -133,7 +133,7 @@ class Trainer(pl.LightningModule):
         distill_loss = 0.0
         loss = agent_reg_loss + agent_cls_loss + others_reg_loss
 
-        if self.teacher is not None:
+        if self.teacher is not None and self.training:  # only apply distillation during training
             print("teacher trajectory distillation")
             with torch.no_grad():
                 teacher_out = self.teacher(data)
@@ -174,7 +174,9 @@ class Trainer(pl.LightningModule):
 
             # Ramp alpha over epochs (optional)
             print("current epoch:", self.current_epoch)
-            alpha = self.distill_alpha * min((self.current_epoch / 20), 1.0)
+            alpha = self.distill_alpha * max((self.current_epoch - 20) / 20, 0.0)  # use distill loss only after 20 epochs
+            alpha = min(alpha, 0.25)  # cap alpha
+
 
             loss = (1 - alpha) * loss + alpha * distill_loss
         else:
@@ -186,7 +188,7 @@ class Trainer(pl.LightningModule):
             "cls_loss": agent_cls_loss.item(),
             "others_reg_loss": others_reg_loss.item(),
             "distill_loss": distill_loss.item() if isinstance(distill_loss, torch.Tensor) else 0.0,
-        }
+        }  # keep track of wall clock and flops
 
 
 

@@ -8,6 +8,7 @@ from hydra.utils import instantiate
 from pytorch_lightning.callbacks import (LearningRateMonitor, ModelCheckpoint,
                                          RichModelSummary, RichProgressBar)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+from pytorch_lightning.profilers import SimpleProfile
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -44,6 +45,7 @@ def main(conf):
         LearningRateMonitor(logging_interval="epoch"),
     ]
 
+    profiler = SimpleProfiler(dirpath=".", filename="profiler.txt")
     trainer = pl.Trainer(
         logger=logger,
         gradient_clip_val=conf.gradient_clip_val,
@@ -56,6 +58,7 @@ def main(conf):
         # limit_train_batches=1.0,
         limit_val_batches=0.01, #conf.limit_val_batches,
         sync_batchnorm=conf.sync_bn,
+        profiler=profiler
     )
 
     model = instantiate(conf.model.target)
