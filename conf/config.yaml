@@ -17,7 +17,7 @@ output: ${model.name}-${model.phase}_${dm}
 num_workers: 6
 gpus: 1
 sync_bn: true
-batch_size: 128
+batch_size: 48
 epochs: 60
 warmup_epochs: 10
 
