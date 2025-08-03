@@ -24,14 +24,14 @@ def main():
 
     np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
     split = "val"
-    data_root = Path("/path/to/data_root/emp")
+    data_root = Path("data/emp")
     dataset = Av2Dataset(data_root=data_root, cached_split=split)
 
     if predict:
         chkpt_fpath = "checkpoints/empd.ckpt"
         assert os.path.exists(chkpt_fpath), "chkpt files does not exist, update path to checkpoint"
         model = Model.load_from_checkpoint(chkpt_fpath, pretrained_weights=chkpt_fpath)
-        model = model.eval().cuda()
+        model = model.eval() # .cuda()
 
     B = 64
     dataloader = TorchDataLoader(
@@ -48,7 +48,7 @@ def main():
     for data in tqdm(dataloader):
         if predict:
             for k in data.keys():
-                if torch.is_tensor(data[k]): data[k] = data[k].cuda()
+                if torch.is_tensor(data[k]): data[k] = data[k] # .cuda()
             with torch.no_grad():
                 batch_pred, scores = model.predict(data, full=True)
 
@@ -56,8 +56,8 @@ def main():
 
         for b in range(0, data["x"].shape[0], 1):
             scene_id = data["scenario_id"][b]
-            scene_file = data_root / ".." / split / "raw" / scene_id / ("scenario_" + scene_id + ".parquet")
-            map_file = data_root / ".." / split / "raw" / scene_id / ("log_map_archive_" + scene_id + ".json")
+            scene_file = data_root / split / "raw" / scene_id / ("scenario_" + scene_id + ".parquet")
+            map_file = data_root / split / "raw" / scene_id / ("log_map_archive_" + scene_id + ".json")
             scenario = scenario_serialization.load_argoverse_scenario_parquet(scene_file)
             static_map = ArgoverseStaticMap.from_json(map_file)
             if predict:

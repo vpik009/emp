@@ -506,10 +506,11 @@ def _plot_actor_bounding_box(
         (pivot_x, pivot_y),
         bbox_length,
         bbox_width,
-        np.degrees(heading),
+        angle=np.degrees(heading),  # keyword now
         zorder=_BOUNDING_BOX_ZORDER + 100,
         fc=color,
         ec="dimgrey",
         alpha=1.0,
     )
+
     ax.add_patch(vehicle_bounding_box)
