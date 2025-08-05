@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from src.model.trainer_forecast import Trainer
 
 
-ckpt_path = "outputs/emp_tiny_thin-forecast_av2/baseline/checkpoints/last.ckpt"  # Kenta and Ole: change this to the model checkpoint
+ckpt_path = "checkpoints/empd.ckpt"  # Kenta and Ole: change this to the model checkpoint
 decoder_type = "detr"
 device = "cpu"  # set this to cuda if you guys have a GPU
 

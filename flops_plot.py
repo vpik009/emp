@@ -14,8 +14,10 @@ model_markers = {
     "Small wide": "o",   # circle
     "Small thin": "s",   # square
     "Tiny wide": "D",    # diamond
-    "Tiny thin": "^"     # triangle
+    "Tiny thin": "^",     # triangle
+    #"EMPD": "*",         # star
 }
+    
 
 
 df["Baseline"] = df["Baseline"].astype(bool)
@@ -34,11 +36,15 @@ for _, row in df_nonbase.iterrows():
     ax.scatter(row[x_col], row[y_col], s=100, color=color, marker=marker, edgecolor="black")
 
 # plot the baseline points (use TDD baseline)
-# df_base_last = df_base.groupby("Model").tail(1)
+df_base_last = df_base.groupby("Model").tail(1)
 
-for _, row in df_base.iterrows():  # iter through models and get TDD baseline
+for _, row in df_base_last.iterrows():  # iter through models and get TDD baseline
     model = row["Model"]
-    ax.scatter(row[x_col], row[y_col], s=100, color=method_colors[row["Method"]], marker=".", edgecolor="black", alpha=0.4)
+    if model != "EMPD":  # skip EMPD for now
+        ax.scatter(row[x_col], row[y_col], s=100, color="grey", marker=model_markers[model], edgecolor="black", alpha=0.7)
+    else:
+        # ax.scatter(row[x_col], row[y_col], s=100, color="yellow", marker=model_markers[model], edgecolor="black", alpha=0.7)
+        continue
  
 ax.set_xlabel("Inference FLOPs (G)")
 ax.set_ylabel(y_col)
@@ -51,8 +57,8 @@ method_handles = [
     for method, color in method_colors.items()
 ]
 
-baseline_handle = plt.Line2D([], [], marker='.', color='w', markerfacecolor="grey",
-                             markeredgecolor="black", markersize=10, label="Baseline", alpha=0.4)
+baseline_handle = plt.Line2D([], [], marker='o', color='w', markerfacecolor="grey",
+                             markeredgecolor="black", markersize=10, label="Baseline", alpha=0.7)
 
 model_handles = [
     plt.Line2D([], [], marker=marker, color='w', markerfacecolor="gray",
