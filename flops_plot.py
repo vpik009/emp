@@ -34,12 +34,11 @@ for _, row in df_nonbase.iterrows():
     ax.scatter(row[x_col], row[y_col], s=100, color=color, marker=marker, edgecolor="black")
 
 # plot the baseline points (use TDD baseline)
-df_base_last = df_base.groupby("Model").tail(1)
+# df_base_last = df_base.groupby("Model").tail(1)
 
-for _, row in df_base_last.iterrows():  # iter through models and get TDD baseline
+for _, row in df_base.iterrows():  # iter through models and get TDD baseline
     model = row["Model"]
-    marker = model_markers.get(model, "o")
-    ax.scatter(row[x_col], row[y_col], s=100, color="grey", marker=marker, edgecolor="black", alpha=0.7)
+    ax.scatter(row[x_col], row[y_col], s=100, color=method_colors[row["Method"]], marker=".", edgecolor="black", alpha=0.4)
  
 ax.set_xlabel("Inference FLOPs (G)")
 ax.set_ylabel(y_col)
@@ -52,8 +51,8 @@ method_handles = [
     for method, color in method_colors.items()
 ]
 
-baseline_handle = plt.Line2D([], [], marker='o', color='w', markerfacecolor="grey",
-                             markeredgecolor="black", markersize=10, label="Baseline")
+baseline_handle = plt.Line2D([], [], marker='.', color='w', markerfacecolor="grey",
+                             markeredgecolor="black", markersize=10, label="Baseline", alpha=0.4)
 
 model_handles = [
     plt.Line2D([], [], marker=marker, color='w', markerfacecolor="gray",
